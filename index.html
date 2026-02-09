@@ -412,6 +412,58 @@
       z-index: 100;
     }
 
+    /* ===== PANEL TOGGLE BUTTONS ===== */
+    .panel-toggle {
+      position: fixed;
+      width: 40px;
+      height: 40px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      z-index: 101;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .panel-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .panel-toggle.active {
+      background: var(--accent);
+      color: var(--bg-dark);
+      border-color: var(--accent);
+    }
+
+    #toggle-factions {
+      left: 290px;
+      top: 80px;
+    }
+
+    #toggle-settings {
+      right: 220px;
+      top: 80px;
+    }
+
+    #faction-panel.collapsed,
+    #export-panel.collapsed {
+      display: none;
+    }
+
+    /* When panel collapsed, move toggle to panel position */
+    #toggle-factions:not(.active) {
+      left: 15px;
+    }
+
+    #toggle-settings:not(.active) {
+      right: 15px;
+    }
+
     /* ===== EXPORT PANEL ===== */
     #export-panel {
       position: fixed;
@@ -593,15 +645,32 @@
       </button>
     </div>
 
+    <!-- Panel Toggle Buttons -->
+    <button id="toggle-factions" class="panel-toggle" title="Toggle Factions (F)" onclick="togglePanel('factions')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    </button>
+    <button id="toggle-settings" class="panel-toggle" title="Toggle Settings (S)" onclick="togglePanel('settings')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    </button>
+
     <!-- Faction Panel -->
-    <div id="faction-panel">
+    <div id="faction-panel" class="collapsed">
       <h3>FACTIONS <span id="faction-total"></span></h3>
       <div class="faction-list" id="faction-list"></div>
       <button id="add-faction-btn" onclick="showAddFactionModal()">+ Add Faction</button>
     </div>
 
     <!-- Export Panel -->
-    <div id="export-panel">
+    <div id="export-panel" class="collapsed">
       <h3>SETTINGS</h3>
       <div class="form-group" style="margin-bottom:10px">
         <label>Hex Opacity: <span id="opacity-value">60%</span></label>
@@ -658,6 +727,41 @@
     };
 
     let editingFactionId = null;
+
+    // Undo/Redo history
+    let undoStack = [];
+    let redoStack = [];
+    const MAX_HISTORY = 50;
+
+    function saveHistoryState() {
+      // Deep copy current hex state
+      const snapshot = state.hexes.map(col => [...col]);
+      undoStack.push(snapshot);
+      if (undoStack.length > MAX_HISTORY) {
+        undoStack.shift();
+      }
+      redoStack = []; // Clear redo on new action
+    }
+
+    function undo() {
+      if (undoStack.length === 0) return;
+      // Save current state to redo
+      const currentSnapshot = state.hexes.map(col => [...col]);
+      redoStack.push(currentSnapshot);
+      // Restore previous state
+      state.hexes = undoStack.pop();
+      renderFactionList();
+    }
+
+    function redo() {
+      if (redoStack.length === 0) return;
+      // Save current state to undo
+      const currentSnapshot = state.hexes.map(col => [...col]);
+      undoStack.push(currentSnapshot);
+      // Restore redo state
+      state.hexes = redoStack.pop();
+      renderFactionList();
+    }
 
     // ===== UTILITIES =====
     function fixColor(c) {
@@ -839,6 +943,16 @@
       const sliderValue = Math.round(state.hexOpacity * 100);
       document.getElementById('opacity-slider').value = sliderValue;
       document.getElementById('opacity-value').textContent = sliderValue + '%';
+    }
+
+    function togglePanel(panel) {
+      if (panel === 'factions') {
+        document.getElementById('faction-panel').classList.toggle('collapsed');
+        document.getElementById('toggle-factions').classList.toggle('active');
+      } else if (panel === 'settings') {
+        document.getElementById('export-panel').classList.toggle('collapsed');
+        document.getElementById('toggle-settings').classList.toggle('active');
+      }
     }
 
     function startEditor() {
@@ -1232,8 +1346,10 @@
         const hex = screenToHex(x, y);
 
         if (state.tool === 'bucket') {
+          saveHistoryState();
           bucketFill(hex.q, hex.r);
         } else {
+          saveHistoryState();
           paintHex(hex.q, hex.r);
           state.isPainting = true;
         }
@@ -1289,6 +1405,20 @@
     }
 
     function handleKeyDown(e) {
+      // Ctrl+Z = Undo, Ctrl+Y = Redo
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z') {
+          e.preventDefault();
+          undo();
+          return;
+        }
+        if (e.key === 'y') {
+          e.preventDefault();
+          redo();
+          return;
+        }
+      }
+
       switch (e.key.toLowerCase()) {
         case 'v': setMode('view'); break;
         case 'e': setMode('edit'); break;
@@ -1296,6 +1426,8 @@
         case 'x': setTool('erase'); break;
         case 'b': setTool('bucket'); break;
         case 'l': toggleLegend(); break;
+        case 'f': togglePanel('factions'); break;
+        case 's': togglePanel('settings'); break;
         case '[':
         case ']':
           if (state.factions.length > 0) {
