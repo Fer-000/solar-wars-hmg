@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hex Map Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-dark: #0a0a0f;
+      --bg-panel: rgba(15, 15, 25, 0.95);
+      --accent: #00f3ff;
+      --accent-glow: rgba(0, 243, 255, 0.3);
+      --text: #e0e0e0;
+      --text-dim: #888;
+      --border: rgba(0, 243, 255, 0.2);
+      --danger: #ff4060;
+      --success: #40ff90;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* ===== WELCOME SCREEN ===== */
+    #welcome-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+      z-index: 1000;
+    }
+
+    .welcome-container {
+      text-align: center;
+      max-width: 600px;
+      padding: 40px;
+    }
+
+    .welcome-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 3rem;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 10px;
+    }
+
+    .welcome-subtitle {
+      color: var(--text-dim);
+      margin-bottom: 40px;
+    }
+
+    .welcome-options {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .option-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px;
+      width: 250px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .option-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+      transform: translateY(-5px);
+    }
+
+    .option-card h3 {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .option-card p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px;
+      min-width: 400px;
+      max-width: 90vw;
+    }
+
+    .modal h2 {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 1rem;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 15px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg-dark);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: #00d4e0;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .btn-danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .btn-danger:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    /* ===== EDITOR ===== */
+    #editor {
+      display: none;
+      position: fixed;
+      inset: 0;
+    }
+
+    #editor.active {
+      display: block;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ===== TOOLBAR ===== */
+    #toolbar {
+      position: fixed;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 15px;
+      z-index: 100;
+    }
+
+    .tool-btn {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 1.2rem;
+    }
+
+    .tool-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .tool-btn.active {
+      background: var(--accent);
+      color: var(--bg-dark);
+      border-color: var(--accent);
+    }
+
+    .tool-divider {
+      width: 1px;
+      background: var(--border);
+      margin: 0 5px;
+    }
+
+    /* ===== FACTION PANEL ===== */
+    #faction-panel {
+      position: fixed;
+      left: 15px;
+      top: 80px;
+      bottom: 15px;
+      width: 260px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 15px;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    #faction-panel h3 {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--accent);
+      font-size: 0.9rem;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .faction-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .faction-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .faction-item:hover {
+      border-color: var(--border);
+    }
+
+    .faction-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .faction-color {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      flex-shrink: 0;
+    }
+
+    .faction-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .faction-name {
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .faction-count {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .faction-actions {
+      display: flex;
+      gap: 5px;
+    }
+
+    .faction-actions button {
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    .faction-actions button:hover {
+      color: var(--accent);
+      background: rgba(0, 243, 255, 0.1);
+    }
+
+    .faction-actions button.delete:hover {
+      color: var(--danger);
+      background: rgba(255, 64, 96, 0.1);
+    }
+
+    #add-faction-btn {
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #add-faction-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ===== STATUS BAR ===== */
+    #status-bar {
+      position: fixed;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 20px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      z-index: 100;
+    }
+
+    /* ===== EXPORT PANEL ===== */
+    #export-panel {
+      position: fixed;
+      right: 15px;
+      top: 80px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 15px;
+      z-index: 100;
+      width: 180px;
+    }
+
+    #export-panel h3 {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--accent);
+      font-size: 0.9rem;
+      margin-bottom: 15px;
+    }
+
+    #export-panel .btn {
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- WELCOME SCREEN -->
+  <div id="welcome-screen">
+    <div class="welcome-container">
+      <h1 class="welcome-title">Hex Map Generator</h1>
+      <p class="welcome-subtitle">HMG made simple | By Fer0 for SW</p>
+      <div class="welcome-options">
+        <div class="option-card" onclick="showNewMapModal()">
+          <h3>New Map</h3>
+          <p>Create a blank hex grid with custom dimensions</p>
+        </div>
+        <div class="option-card" onclick="triggerFileLoad()">
+          <h3>Load File</h3>
+          <p>Import an existing map from a JSON file</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW MAP MODAL -->
+  <div class="modal-overlay" id="new-map-modal">
+    <div class="modal">
+      <h2>Create New Map</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Width (columns)</label>
+          <input type="number" id="new-width" value="73" min="10" max="200">
+        </div>
+        <div class="form-group">
+          <label>Height (rows)</label>
+          <input type="number" id="new-height" value="36" min="10" max="200">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Map Name</label>
+        <input type="text" id="new-name" placeholder="My Map">
+      </div>
+      <div class="form-group">
+        <label>Background Image URL</label>
+        <input type="url" id="new-bg-url" placeholder="https://example.com/image.png">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal('new-map-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="createNewMap()">Create Map</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN FILE INPUT -->
+  <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileSelect(event)">
+
+  <!-- ADD/EDIT FACTION MODAL -->
+  <div class="modal-overlay" id="faction-modal">
+    <div class="modal">
+      <h2 id="faction-modal-title">Add Faction</h2>
+      <div class="form-group">
+        <label>Faction Name</label>
+        <input type="text" id="faction-name" placeholder="Empire">
+      </div>
+      <div class="form-group">
+        <label>Abbreviation</label>
+        <input type="text" id="faction-abb" placeholder="EMP">
+      </div>
+      <div class="form-group">
+        <label>Fill Color</label>
+        <input type="color" id="faction-color" value="#ff4040">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal('faction-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveFaction()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDITOR -->
+  <div id="editor">
+    <canvas id="canvas"></canvas>
+
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <button class="tool-btn" id="btn-view" title="View Mode (V)" onclick="setMode('view')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+        </svg>
+      </button>
+      <button class="tool-btn active" id="btn-edit" title="Edit Mode (E)" onclick="setMode('edit')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      </button>
+      <div class="tool-divider"></div>
+      <button class="tool-btn active" id="btn-draw" title="Draw (D)" onclick="setTool('draw')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 19l7-7 3 3-7 7-3-3z" />
+          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+          <path d="M2 2l7.586 7.586" />
+          <circle cx="11" cy="11" r="2" />
+        </svg>
+      </button>
+      <button class="tool-btn" id="btn-erase" title="Erase (X)" onclick="setTool('erase')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 20H7L3 16a1 1 0 0 1 0-1.41l9.12-9.13a1 1 0 0 1 1.41 0l6.59 6.59a1 1 0 0 1 0 1.41L13 20" />
+          <line x1="18" y1="13" x2="11" y2="6" />
+        </svg>
+      </button>
+      <button class="tool-btn" id="btn-bucket" title="Bucket Fill (B)" onclick="setTool('bucket')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18" />
+          <path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" />
+          <path d="M2 10c0-4.4 4.5-8 10-8s10 3.6 10 8" />
+        </svg>
+      </button>
+      <div class="tool-divider"></div>
+      <button class="tool-btn" id="btn-legend" title="Toggle Legend (L)" onclick="toggleLegend()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="7" y1="8" x2="7" y2="8" />
+          <line x1="10" y1="8" x2="17" y2="8" />
+          <line x1="7" y1="12" x2="7" y2="12" />
+          <line x1="10" y1="12" x2="17" y2="12" />
+          <line x1="7" y1="16" x2="7" y2="16" />
+          <line x1="10" y1="16" x2="17" y2="16" />
+        </svg>
+      </button>
+      <div class="tool-divider"></div>
+      <button class="tool-btn" title="Back to Menu" onclick="backToMenu()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Faction Panel -->
+    <div id="faction-panel">
+      <h3>FACTIONS <span id="faction-total"></span></h3>
+      <div class="faction-list" id="faction-list"></div>
+      <button id="add-faction-btn" onclick="showAddFactionModal()">+ Add Faction</button>
+    </div>
+
+    <!-- Export Panel -->
+    <div id="export-panel">
+      <h3>SETTINGS</h3>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Hex Opacity: <span id="opacity-value">60%</span></label>
+        <input type="range" id="opacity-slider" min="10" max="100" value="60" style="width:100%"
+          oninput="updateOpacity(this.value)">
+      </div>
+      <h3>EXPORT</h3>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="export-legend" checked style="width:auto">
+          Include legend
+        </label>
+      </div>
+      <button class="btn" onclick="downloadJSON()">Download JSON</button>
+      <button class="btn" onclick="downloadImage()">Download Image</button>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="status-bar">
+      <span id="status-text">Ready</span>
+    </div>
+  </div>
+
+  <script>
+    // ===== CONSTANTS =====
+    const HEX_SIZE = 25;
+    const HEX_APOTHEM = Math.sqrt(3) * HEX_SIZE / 2;
+    const COL_WIDTH = HEX_SIZE * 1.5;
+    const ROW_HEIGHT = HEX_APOTHEM * 2;
+
+    // ===== STATE =====
+    let state = {
+      name: 'Untitled',
+      width: 73,
+      height: 36,
+      hexOpacity: 0.6,
+      stroke: { r: 255, g: 255, b: 255, a: 0.3 },
+      factions: [],
+      hexes: [], // 2D array [col][row] = factionId or null
+      bgImage: null,
+      bgConfig: { scaleX: 1, scaleY: 1 },
+      imageUrl: '',
+
+      // Editor state
+      camera: { x: 0, y: 0, zoom: 1 },
+      mode: 'edit',
+      tool: 'draw',
+      selectedFactionId: null,
+      isDragging: false,
+      isPainting: false,
+      lastMouse: { x: 0, y: 0 },
+      dragStart: { x: 0, y: 0 },
+      showLegend: false
+    };
+
+    let editingFactionId = null;
+
+    // ===== UTILITIES =====
+    function fixColor(c) {
+      if (!c) return '#888888';
+      return c.startsWith('#') ? c : '#' + c;
+    }
+
+    function hexToRgb(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      } : { r: 128, g: 128, b: 128 };
+    }
+
+    function getNextFactionId() {
+      return state.factions.length > 0
+        ? Math.max(...state.factions.map(f => f.id)) + 1
+        : 1;
+    }
+
+    function getFactionById(id) {
+      return state.factions.find(f => f.id === id);
+    }
+
+    function getFactionColor(id) {
+      const f = getFactionById(id);
+      return f ? fixColor(f.fill) : null;
+    }
+
+    function calculateHexCounts() {
+      const counts = {};
+      state.factions.forEach(f => counts[f.id] = 0);
+
+      for (let q = 0; q < state.width; q++) {
+        for (let r = 0; r < state.height; r++) {
+          const fid = state.hexes[q]?.[r];
+          if (fid !== null && fid !== undefined && counts[fid] !== undefined) {
+            counts[fid]++;
+          }
+        }
+      }
+
+      state.factions.forEach(f => f.hexCount = counts[f.id] || 0);
+    }
+
+    // ===== MODALS =====
+    function showNewMapModal() {
+      document.getElementById('new-map-modal').classList.add('active');
+    }
+
+    function triggerFileLoad() {
+      document.getElementById('file-input').click();
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          loadMapFromData(data);
+        } catch (err) {
+          alert('Invalid JSON file: ' + err.message);
+        }
+      };
+      reader.onerror = () => alert('Error reading file');
+      reader.readAsText(file);
+
+      // Reset input so same file can be loaded again
+      event.target.value = '';
+    }
+
+    function showAddFactionModal() {
+      editingFactionId = null;
+      document.getElementById('faction-modal-title').textContent = 'Add Faction';
+      document.getElementById('faction-name').value = '';
+      document.getElementById('faction-abb').value = '';
+      document.getElementById('faction-color').value = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+      document.getElementById('faction-modal').classList.add('active');
+    }
+
+    function showEditFactionModal(id) {
+      const faction = getFactionById(id);
+      if (!faction) return;
+
+      editingFactionId = id;
+      document.getElementById('faction-modal-title').textContent = 'Edit Faction';
+      document.getElementById('faction-name').value = faction.name;
+      document.getElementById('faction-abb').value = faction.abb || '';
+      document.getElementById('faction-color').value = fixColor(faction.fill);
+      document.getElementById('faction-modal').classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // ===== MAP CREATION/LOADING =====
+    function createNewMap() {
+      const width = parseInt(document.getElementById('new-width').value) || 73;
+      const height = parseInt(document.getElementById('new-height').value) || 36;
+      const name = document.getElementById('new-name').value || 'Untitled';
+      const bgUrl = document.getElementById('new-bg-url').value;
+
+      state.name = name;
+      state.width = width;
+      state.height = height;
+      state.factions = [];
+      state.hexes = Array(width).fill(null).map(() => Array(height).fill(null));
+      state.imageUrl = bgUrl;
+      state.camera = { x: 50, y: 50, zoom: 1 };
+
+      if (bgUrl) {
+        loadBackgroundImage(bgUrl);
+      }
+
+      closeModal('new-map-modal');
+      startEditor();
+    }
+
+    function loadMapFromData(data) {
+      state.name = data.name || 'Loaded Map';
+      state.width = data.width || 73;
+      state.height = data.height || 36;
+      state.hexOpacity = data.hexOpacity || 0.6;
+      state.stroke = data.stroke || { r: 255, g: 255, b: 255, a: 0.3 };
+      state.factions = (data.factions || []).map(f => ({
+        ...f,
+        fill: f.fill?.replace('#', '') || '888888',
+        stroke: f.stroke?.replace('#', '') || '000000'
+      }));
+      state.hexes = data.hexes || Array(state.width).fill(null).map(() => Array(state.height).fill(null));
+      state.imageUrl = data.imageData || '';
+      state.camera = { x: 50, y: 50, zoom: 1 };
+
+      if (data.image) {
+        state.bgConfig = { scaleX: data.image.scaleX || 1, scaleY: data.image.scaleY || 1 };
+      }
+
+      if (state.imageUrl) {
+        loadBackgroundImage(state.imageUrl);
+      }
+
+      if (state.factions.length > 0) {
+        state.selectedFactionId = state.factions[0].id;
+      }
+
+      calculateHexCounts();
+      startEditor();
+    }
+
+    function loadBackgroundImage(url) {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        state.bgImage = img;
+        // Auto-calculate scale if not set
+        if (state.bgConfig.scaleX === 1 && state.bgConfig.scaleY === 1) {
+          const targetWidth = state.width * COL_WIDTH + HEX_SIZE;
+          const targetHeight = state.height * ROW_HEIGHT + HEX_APOTHEM;
+          state.bgConfig.scaleX = targetWidth / img.width;
+          state.bgConfig.scaleY = targetHeight / img.height;
+        }
+      };
+      img.onerror = () => console.warn('Failed to load background image');
+      img.src = url;
+    }
+
+    function updateOpacity(value) {
+      state.hexOpacity = value / 100;
+      document.getElementById('opacity-value').textContent = value + '%';
+    }
+
+    function syncOpacitySlider() {
+      const sliderValue = Math.round(state.hexOpacity * 100);
+      document.getElementById('opacity-slider').value = sliderValue;
+      document.getElementById('opacity-value').textContent = sliderValue + '%';
+    }
+
+    function startEditor() {
+      document.getElementById('welcome-screen').style.display = 'none';
+      document.getElementById('editor').classList.add('active');
+      syncOpacitySlider();
+      renderFactionList();
+      initCanvas();
+    }
+
+    function backToMenu() {
+      if (confirm('Return to menu? Unsaved changes will be lost.')) {
+        document.getElementById('welcome-screen').style.display = 'flex';
+        document.getElementById('editor').classList.remove('active');
+      }
+    }
+
+    // ===== FACTION MANAGEMENT =====
+    function saveFaction() {
+      const name = document.getElementById('faction-name').value || 'Unnamed';
+      const abb = document.getElementById('faction-abb').value || name.substring(0, 3);
+      const fill = document.getElementById('faction-color').value.replace('#', '');
+      const stroke = '000000'; // Default black stroke, no clue what stroke is for in the original json
+
+      if (editingFactionId !== null) {
+        const faction = getFactionById(editingFactionId);
+        if (faction) {
+          faction.name = name;
+          faction.abb = abb;
+          faction.fill = fill;
+          faction.stroke = stroke;
+        }
+      } else {
+        state.factions.push({
+          id: getNextFactionId(),
+          name,
+          abb,
+          fill,
+          stroke,
+          hexCount: 0
+        });
+      }
+
+      if (!state.selectedFactionId && state.factions.length > 0) {
+        state.selectedFactionId = state.factions[0].id;
+      }
+
+      closeModal('faction-modal');
+      renderFactionList();
+    }
+
+    function deleteFaction(id) {
+      if (!confirm('Delete this faction? All its hexes will be cleared.')) return;
+
+      // Clear hexes
+      for (let q = 0; q < state.width; q++) {
+        for (let r = 0; r < state.height; r++) {
+          if (state.hexes[q][r] === id) {
+            state.hexes[q][r] = null;
+          }
+        }
+      }
+
+      state.factions = state.factions.filter(f => f.id !== id);
+
+      if (state.selectedFactionId === id) {
+        state.selectedFactionId = state.factions.length > 0 ? state.factions[0].id : null;
+      }
+
+      renderFactionList();
+    }
+
+    function selectFaction(id) {
+      state.selectedFactionId = id;
+      renderFactionList();
+    }
+
+    function renderFactionList() {
+      calculateHexCounts();
+
+      const container = document.getElementById('faction-list');
+      const totalHexes = state.factions.reduce((sum, f) => sum + f.hexCount, 0);
+      document.getElementById('faction-total').textContent = `(${totalHexes} hexes)`;
+
+      container.innerHTML = state.factions.map(f => `
+    <div class="faction-item ${f.id === state.selectedFactionId ? 'active' : ''}" onclick="selectFaction(${f.id})">
+      <div class="faction-color" style="background: ${fixColor(f.fill)}"></div>
+      <div class="faction-info">
+        <div class="faction-name">${f.name}</div>
+        <div class="faction-count">${f.hexCount} hexes</div>
+      </div>
+      <div class="faction-actions">
+        <button onclick="event.stopPropagation(); showEditFactionModal(${f.id})">✎</button>
+        <button class="delete" onclick="event.stopPropagation(); deleteFaction(${f.id})">✕</button>
+      </div>
+    </div>
+  `).join('');
+    }
+
+    // ===== TOOLS & MODES =====
+    function setMode(mode) {
+      state.mode = mode;
+      document.getElementById('btn-view').classList.toggle('active', mode === 'view');
+      document.getElementById('btn-edit').classList.toggle('active', mode === 'edit');
+      updateStatus();
+    }
+
+    function setTool(tool) {
+      state.tool = tool;
+      document.getElementById('btn-draw').classList.toggle('active', tool === 'draw');
+      document.getElementById('btn-erase').classList.toggle('active', tool === 'erase');
+      document.getElementById('btn-bucket').classList.toggle('active', tool === 'bucket');
+      updateStatus();
+    }
+
+    function updateStatus() {
+      const modeText = state.mode === 'view' ? 'View' : 'Edit';
+      const toolText = state.tool.charAt(0).toUpperCase() + state.tool.slice(1);
+      const factionName = state.selectedFactionId ? getFactionById(state.selectedFactionId)?.name : 'None';
+      document.getElementById('status-text').textContent =
+        `${modeText} Mode | Tool: ${toolText} | Faction: ${factionName} | Zoom: ${Math.round(state.camera.zoom * 100)}%`;
+    }
+
+    // ===== GEOMETRY =====
+    function getHexCenter(q, r) {
+      const cx = q * COL_WIDTH;
+      let cy = r * ROW_HEIGHT;
+      if (q % 2 !== 0) cy += HEX_APOTHEM;
+      return { x: cx, y: cy };
+    }
+
+    function screenToHex(sx, sy) {
+      const worldX = sx / state.camera.zoom - state.camera.x;
+      const worldY = sy / state.camera.zoom - state.camera.y;
+
+      const approxQ = Math.round(worldX / COL_WIDTH);
+      const approxR = Math.round(worldY / ROW_HEIGHT);
+
+      let bestDist = Infinity;
+      let bestHex = { q: -1, r: -1 };
+
+      for (let i = approxQ - 1; i <= approxQ + 1; i++) {
+        for (let j = approxR - 1; j <= approxR + 1; j++) {
+          const center = getHexCenter(i, j);
+          const d2 = (worldX - center.x) ** 2 + (worldY - center.y) ** 2;
+          if (d2 < bestDist) {
+            bestDist = d2;
+            bestHex = { q: i, r: j };
+          }
+        }
+      }
+
+      return bestHex;
+    }
+
+    function isValidHex(q, r) {
+      return q >= 0 && q < state.width && r >= 0 && r < state.height;
+    }
+
+    function getHexNeighbors(q, r) {
+      const odd = q % 2 !== 0;
+      const offsets = odd
+        ? [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [0, -1]]
+        : [[1, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [0, -1]];
+
+      return offsets
+        .map(([dq, dr]) => ({ q: q + dq, r: r + dr }))
+        .filter(h => isValidHex(h.q, h.r));
+    }
+
+    // ===== PAINTING =====
+    function paintHex(q, r) {
+      if (!isValidHex(q, r)) return;
+
+      if (state.tool === 'draw' && state.selectedFactionId) {
+        state.hexes[q][r] = state.selectedFactionId;
+      } else if (state.tool === 'erase') {
+        state.hexes[q][r] = null;
+      }
+    }
+
+    function bucketFill(startQ, startR) {
+      if (!isValidHex(startQ, startR)) return;
+
+      const targetFaction = state.hexes[startQ][startR];
+      const newFaction = state.tool === 'erase' ? null : state.selectedFactionId;
+
+      if (targetFaction === newFaction) return;
+
+      const visited = new Set();
+      const queue = [{ q: startQ, r: startR }];
+
+      while (queue.length > 0) {
+        const { q, r } = queue.shift();
+        const key = `${q},${r}`;
+
+        if (visited.has(key)) continue;
+        if (!isValidHex(q, r)) continue;
+        if (state.hexes[q][r] !== targetFaction) continue;
+
+        visited.add(key);
+        state.hexes[q][r] = newFaction;
+
+        getHexNeighbors(q, r).forEach(n => queue.push(n));
+      }
+
+      renderFactionList();
+    }
+
+    // ===== CANVAS =====
+    let canvas, ctx;
+
+    function initCanvas() {
+      canvas = document.getElementById('canvas');
+      ctx = canvas.getContext('2d', { alpha: false });
+
+      // Event listeners
+      canvas.addEventListener('mousedown', handleMouseDown);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+      // Keyboard shortcuts
+      window.addEventListener('keydown', handleKeyDown);
+
+      // Resize
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      // Start render loop
+      requestAnimationFrame(render);
+      updateStatus();
+    }
+
+    function render() {
+      // Clear
+      ctx.fillStyle = '#050510';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.scale(state.camera.zoom, state.camera.zoom);
+      ctx.translate(state.camera.x, state.camera.y);
+
+      // Draw background
+      if (state.bgImage) {
+        ctx.drawImage(
+          state.bgImage,
+          0, 0,
+          state.bgImage.width * state.bgConfig.scaleX,
+          state.bgImage.height * state.bgConfig.scaleY
+        );
+      }
+
+      // Draw hexes
+      const strokeStyle = `rgba(${state.stroke.r},${state.stroke.g},${state.stroke.b},${state.stroke.a})`;
+
+      for (let q = 0; q < state.width; q++) {
+        for (let r = 0; r < state.height; r++) {
+          const factionId = state.hexes[q]?.[r];
+          if (factionId !== null && factionId !== undefined) {
+            const center = getHexCenter(q, r);
+            const color = getFactionColor(factionId);
+            if (color) {
+              drawHex(center.x, center.y, color, strokeStyle);
+            }
+          }
+        }
+      }
+
+      ctx.restore();
+
+      // Draw legend overlay at bottom of screen
+      if (state.showLegend && state.factions.length > 0) {
+        const legendHexSize = 12;
+        const rowHeight = 30;
+        const legendPadding = 15;
+        const itemPadding = 20; // Space between items
+
+        ctx.font = '11px Inter, sans-serif';
+
+        // Calculate item widths based on actual text
+        const items = state.factions.map(faction => {
+          const text = `${faction.name} (${faction.hexCount || 0})`;
+          const textWidth = ctx.measureText(text).width;
+          const itemWidth = legendHexSize * 2 + 15 + textWidth + itemPadding;
+          return { faction, text, itemWidth };
+        });
+
+        // Calculate rows needed
+        const maxRowWidth = canvas.width - legendPadding * 2;
+        const rows = [];
+        let currentRow = [];
+        let currentRowWidth = 0;
+
+        items.forEach(item => {
+          if (currentRowWidth + item.itemWidth > maxRowWidth && currentRow.length > 0) {
+            rows.push({ items: currentRow, width: currentRowWidth });
+            currentRow = [item];
+            currentRowWidth = item.itemWidth;
+          } else {
+            currentRow.push(item);
+            currentRowWidth += item.itemWidth;
+          }
+        });
+        if (currentRow.length > 0) {
+          rows.push({ items: currentRow, width: currentRowWidth });
+        }
+
+        const legendHeight = rows.length * rowHeight + legendPadding;
+
+        // Dark background bar
+        ctx.fillStyle = 'rgba(10, 10, 15, 0.9)';
+        ctx.fillRect(0, canvas.height - legendHeight, canvas.width, legendHeight);
+
+        // Border line
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height - legendHeight);
+        ctx.lineTo(canvas.width, canvas.height - legendHeight);
+        ctx.stroke();
+
+        // Draw each row
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        rows.forEach((row, rowIndex) => {
+          const rowY = canvas.height - legendHeight + legendPadding / 2 + rowHeight * (rowIndex + 0.5);
+          let x = (canvas.width - row.width) / 2; // Center the row
+
+          row.items.forEach(item => {
+            // Draw hex icon
+            drawLegendHex(ctx, x + legendHexSize, rowY, legendHexSize, fixColor(item.faction.fill));
+
+            // Draw name and count
+            ctx.fillStyle = '#e0e0e0';
+            ctx.fillText(item.text, x + legendHexSize * 2 + 8, rowY);
+
+            x += item.itemWidth;
+          });
+        });
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    function drawHex(cx, cy, fillColor, strokeColor) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i;
+        const x = cx + HEX_SIZE * Math.cos(angle);
+        const y = cy + HEX_SIZE * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+
+      ctx.globalAlpha = state.hexOpacity;
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // ===== INPUT HANDLERS =====
+    function handleMouseDown(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      state.isDragging = true;
+      state.dragStart = { x: e.clientX, y: e.clientY };
+      state.lastMouse = { x: e.clientX, y: e.clientY };
+
+      // Right click = pan
+      if (e.button === 2) {
+        state.isPainting = false;
+        return;
+      }
+
+      // Left click in edit mode
+      if (state.mode === 'edit' && e.button === 0) {
+        const hex = screenToHex(x, y);
+
+        if (state.tool === 'bucket') {
+          bucketFill(hex.q, hex.r);
+        } else {
+          paintHex(hex.q, hex.r);
+          state.isPainting = true;
+        }
+      }
+    }
+
+    function handleMouseMove(e) {
+      if (!state.isDragging) return;
+
+      const dx = e.clientX - state.lastMouse.x;
+      const dy = e.clientY - state.lastMouse.y;
+      state.lastMouse = { x: e.clientX, y: e.clientY };
+
+      // Pan (view mode, or right-click drag)
+      if (state.mode === 'view' || e.buttons === 2) {
+        state.camera.x += dx / state.camera.zoom;
+        state.camera.y += dy / state.camera.zoom;
+      }
+      // Paint
+      else if (state.isPainting && state.tool !== 'bucket') {
+        const rect = canvas.getBoundingClientRect();
+        const hex = screenToHex(e.clientX - rect.left, e.clientY - rect.top);
+        paintHex(hex.q, hex.r);
+      }
+    }
+
+    function handleMouseUp(e) {
+      if (state.isPainting) {
+        renderFactionList(); // Update counts
+      }
+      state.isDragging = false;
+      state.isPainting = false;
+    }
+
+    function handleWheel(e) {
+      e.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const worldX = mouseX / state.camera.zoom - state.camera.x;
+      const worldY = mouseY / state.camera.zoom - state.camera.y;
+
+      let newZoom = state.camera.zoom - e.deltaY * 0.001;
+      newZoom = Math.min(Math.max(0.1, newZoom), 5);
+
+      state.camera.x = mouseX / newZoom - worldX;
+      state.camera.y = mouseY / newZoom - worldY;
+      state.camera.zoom = newZoom;
+
+      updateStatus();
+    }
+
+    function handleKeyDown(e) {
+      switch (e.key.toLowerCase()) {
+        case 'v': setMode('view'); break;
+        case 'e': setMode('edit'); break;
+        case 'd': setTool('draw'); break;
+        case 'x': setTool('erase'); break;
+        case 'b': setTool('bucket'); break;
+        case 'l': toggleLegend(); break;
+        case '[':
+        case ']':
+          if (state.factions.length > 0) {
+            const idx = state.factions.findIndex(f => f.id === state.selectedFactionId);
+            let newIdx = e.key === ']' ? idx + 1 : idx - 1;
+            if (newIdx >= state.factions.length) newIdx = 0;
+            if (newIdx < 0) newIdx = state.factions.length - 1;
+            state.selectedFactionId = state.factions[newIdx].id;
+            renderFactionList();
+            updateStatus();
+          }
+          break;
+      }
+    }
+
+    // ===== EXPORT =====
+    function downloadJSON() {
+      calculateHexCounts();
+
+      const exportData = {
+        name: state.name,
+        width: state.width,
+        height: state.height,
+        hexOpacity: state.hexOpacity,
+        stroke: state.stroke,
+        factions: state.factions.map(f => ({
+          id: f.id,
+          name: f.name,
+          abb: f.abb,
+          fill: f.fill,
+          stroke: f.stroke,
+          hexCount: f.hexCount,
+          hexes: []
+        })),
+        hexes: state.hexes,
+        image: state.bgConfig,
+        imageData: state.imageUrl
+      };
+
+      const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${state.name.replace(/\s+/g, '_')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function toggleLegend() {
+      state.showLegend = !state.showLegend;
+      document.getElementById('btn-legend').classList.toggle('active', state.showLegend);
+    }
+
+    function drawLegendHex(ctx, cx, cy, size, color) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i;
+        const x = cx + size * Math.cos(angle);
+        const y = cy + size * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    function downloadImage() {
+      calculateHexCounts();
+      const includeLegend = document.getElementById('export-legend').checked;
+
+      // Create temporary canvas to measure text
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = '12px Inter, sans-serif';
+
+      // Calculate legend layout
+      const legendHexSize = 15;
+      const rowHeight = 35;
+      const legendPadding = 20;
+      const itemPadding = 25;
+
+      const targetWidth = state.width * COL_WIDTH + HEX_SIZE * 2;
+      const mapHeight = state.height * ROW_HEIGHT + HEX_APOTHEM * 2;
+
+      let legendHeight = 0;
+      let legendRows = [];
+
+      if (includeLegend && state.factions.length > 0) {
+        // Calculate item widths based on actual text
+        const items = state.factions.map(faction => {
+          const text = `${faction.name} (${faction.hexCount})`;
+          const textWidth = tempCtx.measureText(text).width;
+          const itemWidth = legendHexSize * 2 + 20 + textWidth + itemPadding;
+          return { faction, text, itemWidth };
+        });
+
+        // Calculate rows needed
+        const maxRowWidth = targetWidth - legendPadding * 2;
+        let currentRow = [];
+        let currentRowWidth = 0;
+
+        items.forEach(item => {
+          if (currentRowWidth + item.itemWidth > maxRowWidth && currentRow.length > 0) {
+            legendRows.push({ items: currentRow, width: currentRowWidth });
+            currentRow = [item];
+            currentRowWidth = item.itemWidth;
+          } else {
+            currentRow.push(item);
+            currentRowWidth += item.itemWidth;
+          }
+        });
+        if (currentRow.length > 0) {
+          legendRows.push({ items: currentRow, width: currentRowWidth });
+        }
+
+        legendHeight = legendRows.length * rowHeight + legendPadding * 2;
+      }
+
+      // Create offscreen canvas
+      const offCanvas = document.createElement('canvas');
+      const targetHeight = mapHeight + legendHeight;
+      offCanvas.width = targetWidth;
+      offCanvas.height = targetHeight;
+
+      const offCtx = offCanvas.getContext('2d');
+
+      // Draw background
+      if (state.bgImage) {
+        offCtx.drawImage(
+          state.bgImage,
+          0, 0,
+          state.bgImage.width * state.bgConfig.scaleX,
+          state.bgImage.height * state.bgConfig.scaleY
+        );
+      } else {
+        offCtx.fillStyle = '#1a1a2e';
+        offCtx.fillRect(0, 0, targetWidth, mapHeight);
+      }
+
+      // Draw hexes
+      const strokeStyle = `rgba(${state.stroke.r},${state.stroke.g},${state.stroke.b},${state.stroke.a})`;
+
+      for (let q = 0; q < state.width; q++) {
+        for (let r = 0; r < state.height; r++) {
+          const factionId = state.hexes[q]?.[r];
+          if (factionId !== null && factionId !== undefined) {
+            const center = getHexCenter(q, r);
+            const color = getFactionColor(factionId);
+            if (color) {
+              // Draw hex
+              offCtx.beginPath();
+              for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i;
+                const x = center.x + HEX_SIZE * Math.cos(angle);
+                const y = center.y + HEX_SIZE * Math.sin(angle);
+                if (i === 0) offCtx.moveTo(x, y);
+                else offCtx.lineTo(x, y);
+              }
+              offCtx.closePath();
+
+              offCtx.globalAlpha = state.hexOpacity;
+              offCtx.fillStyle = color;
+              offCtx.fill();
+
+              offCtx.globalAlpha = 1;
+              offCtx.strokeStyle = strokeStyle;
+              offCtx.lineWidth = 1;
+              offCtx.stroke();
+            }
+          }
+        }
+      }
+
+      // Draw legend bar
+      if (includeLegend && legendRows.length > 0) {
+        // Dark background for legend
+        offCtx.fillStyle = '#0a0a0f';
+        offCtx.fillRect(0, mapHeight, targetWidth, legendHeight);
+
+        // Border line
+        offCtx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
+        offCtx.lineWidth = 1;
+        offCtx.beginPath();
+        offCtx.moveTo(0, mapHeight);
+        offCtx.lineTo(targetWidth, mapHeight);
+        offCtx.stroke();
+
+        // Draw each row
+        offCtx.font = '12px Inter, sans-serif';
+        offCtx.textAlign = 'left';
+        offCtx.textBaseline = 'middle';
+
+        legendRows.forEach((row, rowIndex) => {
+          const rowY = mapHeight + legendPadding + rowHeight * (rowIndex + 0.5);
+          let x = (targetWidth - row.width) / 2; // Center the row
+
+          row.items.forEach(item => {
+            // Draw hex icon
+            drawLegendHex(offCtx, x + legendHexSize, rowY, legendHexSize, fixColor(item.faction.fill));
+
+            // Draw name and count
+            offCtx.fillStyle = '#e0e0e0';
+            offCtx.fillText(item.text, x + legendHexSize * 2 + 10, rowY);
+
+            x += item.itemWidth;
+          });
+        });
+      }
+
+      // Download
+      offCanvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${state.name.replace(/\s+/g, '_')}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }
+  </script>
+
+</body>
+
+</html>
