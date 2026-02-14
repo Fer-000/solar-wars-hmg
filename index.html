@@ -575,7 +575,12 @@
       </div>
       <div class="form-group">
         <label>Fill Color</label>
-        <input type="color" id="faction-color" value="#ff4040">
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="faction-color-text" placeholder="#RRGGBB" style="flex:1"
+            oninput="syncFactionColor('text')">
+          <input type="color" id="faction-color" value="#ff4040" style="width:50px; padding: 2px; height: 38px;"
+            oninput="syncFactionColor('picker')">
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn" onclick="closeModal('faction-modal')">Cancel</button>
@@ -673,6 +678,21 @@
     <div id="export-panel" class="collapsed">
       <h3>SETTINGS</h3>
       <div class="form-group" style="margin-bottom:10px">
+        <label>Background Image URL</label>
+        <input type="text" id="setting-bg-url" placeholder="https://..." onchange="loadBackgroundImage(this.value)">
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Border Style</label>
+        <select id="border-mode"
+          style="width:100%; padding:5px; background:rgba(0,0,0,0.3); color:var(--text); border:1px solid var(--border); border-radius:4px;"
+          onchange="updateBorderMode(this.value)">
+          <option value="nations">Nations (Default)</option>
+          <option value="frontiers">Frontiers</option>
+          <option value="all">All Hexes</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
         <label>Hex Opacity: <span id="opacity-value">60%</span></label>
         <input type="range" id="opacity-slider" min="10" max="100" value="60" style="width:100%"
           oninput="updateOpacity(this.value)">
@@ -683,6 +703,18 @@
           <input type="checkbox" id="export-legend" checked style="width:auto">
           Include legend
         </label>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Export Scale</label>
+        <select id="export-scale"
+          style="width:100%; padding:5px; background:rgba(0,0,0,0.3); color:var(--text); border:1px solid var(--border); border-radius:4px;">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="3">3x</option>
+        </select>
       </div>
       <button class="btn" onclick="downloadJSON()">Download JSON</button>
       <button class="btn" onclick="downloadImage()">Download Image</button>
@@ -700,6 +732,7 @@
     const HEX_APOTHEM = Math.sqrt(3) * HEX_SIZE / 2;
     const COL_WIDTH = HEX_SIZE * 1.5;
     const ROW_HEIGHT = HEX_APOTHEM * 2;
+    const GRID_OFFSET_X = HEX_SIZE / 2; // Shift grid right to start at diagonal
 
     // ===== STATE =====
     let state = {
@@ -723,7 +756,8 @@
       isPainting: false,
       lastMouse: { x: 0, y: 0 },
       dragStart: { x: 0, y: 0 },
-      showLegend: false
+      showLegend: false,
+      borderMode: 'nations' // nations, frontiers, all, none
     };
 
     let editingFactionId = null;
@@ -843,7 +877,9 @@
       document.getElementById('faction-modal-title').textContent = 'Add Faction';
       document.getElementById('faction-name').value = '';
       document.getElementById('faction-abb').value = '';
-      document.getElementById('faction-color').value = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+      const randColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+      document.getElementById('faction-color').value = randColor;
+      document.getElementById('faction-color-text').value = randColor;
       document.getElementById('faction-modal').classList.add('active');
     }
 
@@ -855,7 +891,9 @@
       document.getElementById('faction-modal-title').textContent = 'Edit Faction';
       document.getElementById('faction-name').value = faction.name;
       document.getElementById('faction-abb').value = faction.abb || '';
-      document.getElementById('faction-color').value = fixColor(faction.fill);
+      const color = fixColor(faction.fill);
+      document.getElementById('faction-color').value = color;
+      document.getElementById('faction-color-text').value = color;
       document.getElementById('faction-modal').classList.add('active');
     }
 
@@ -922,13 +960,13 @@
       img.crossOrigin = 'Anonymous';
       img.onload = () => {
         state.bgImage = img;
-        // Auto-calculate scale if not set
-        if (state.bgConfig.scaleX === 1 && state.bgConfig.scaleY === 1) {
-          const targetWidth = state.width * COL_WIDTH + HEX_SIZE;
-          const targetHeight = state.height * ROW_HEIGHT + HEX_APOTHEM;
-          state.bgConfig.scaleX = targetWidth / img.width;
-          state.bgConfig.scaleY = targetHeight / img.height;
-        }
+        // Calculate scale to fit grid
+        // Image starts at (0,0). Hex centers: 0 to (width-1)*COL_WIDTH
+        // Last hex right edge is at (width-1)*COL_WIDTH + HEX_SIZE
+        const gridWidth = (state.width - 1) * COL_WIDTH + HEX_SIZE;
+        const gridHeight = (state.height - 1) * ROW_HEIGHT + HEX_APOTHEM;
+        state.bgConfig.scaleX = gridWidth / img.width;
+        state.bgConfig.scaleY = gridHeight / img.height;
       };
       img.onerror = () => console.warn('Failed to load background image');
       img.src = url;
@@ -937,6 +975,10 @@
     function updateOpacity(value) {
       state.hexOpacity = value / 100;
       document.getElementById('opacity-value').textContent = value + '%';
+    }
+
+    function updateBorderMode(value) {
+      state.borderMode = value;
     }
 
     function syncOpacitySlider() {
@@ -971,10 +1013,30 @@
     }
 
     // ===== FACTION MANAGEMENT =====
+    function syncFactionColor(source) {
+      const textInput = document.getElementById('faction-color-text');
+      const colorInput = document.getElementById('faction-color');
+
+      if (source === 'picker') {
+        textInput.value = colorInput.value;
+      } else if (source === 'text') {
+        const val = textInput.value;
+        if (/^#[0-9A-F]{6}$/i.test(val)) {
+          colorInput.value = val;
+        }
+      }
+    }
+
     function saveFaction() {
       const name = document.getElementById('faction-name').value || 'Unnamed';
       const abb = document.getElementById('faction-abb').value || name.substring(0, 3);
-      const fill = document.getElementById('faction-color').value.replace('#', '');
+
+      let fill = document.getElementById('faction-color-text').value;
+      if (!/^#[0-9A-F]{6}$/i.test(fill)) {
+        fill = document.getElementById('faction-color').value;
+      }
+      fill = fill.replace('#', '');
+
       const stroke = '000000'; // Default black stroke, no clue what stroke is for in the original json
 
       if (editingFactionId !== null) {
@@ -1069,6 +1131,13 @@
     }
 
     function updateStatus() {
+      const statusBar = document.getElementById('status-bar');
+      if (state.showLegend) {
+        statusBar.style.display = 'none';
+        return;
+      }
+      statusBar.style.display = 'block';
+
       const modeText = state.mode === 'view' ? 'View' : 'Edit';
       const toolText = state.tool.charAt(0).toUpperCase() + state.tool.slice(1);
       const factionName = state.selectedFactionId ? getFactionById(state.selectedFactionId)?.name : 'None';
@@ -1078,7 +1147,7 @@
 
     // ===== GEOMETRY =====
     function getHexCenter(q, r) {
-      const cx = q * COL_WIDTH;
+      const cx = q * COL_WIDTH + GRID_OFFSET_X;
       let cy = r * ROW_HEIGHT;
       if (q % 2 !== 0) cy += HEX_APOTHEM;
       return { x: cx, y: cy };
@@ -1088,7 +1157,7 @@
       const worldX = sx / state.camera.zoom - state.camera.x;
       const worldY = sy / state.camera.zoom - state.camera.y;
 
-      const approxQ = Math.round(worldX / COL_WIDTH);
+      const approxQ = Math.round((worldX - GRID_OFFSET_X) / COL_WIDTH);
       const approxR = Math.round(worldY / ROW_HEIGHT);
 
       let bestDist = Infinity;
@@ -1121,6 +1190,31 @@
       return offsets
         .map(([dq, dr]) => ({ q: q + dq, r: r + dr }))
         .filter(h => isValidHex(h.q, h.r));
+    }
+
+    function getEdgeIndex(q1, r1, q2, r2) {
+      const c1 = getHexCenter(q1, r1);
+      const c2 = getHexCenter(q2, r2);
+      let angle = Math.atan2(c2.y - c1.y, c2.x - c1.x); // -PI to PI
+      if (angle < 0) angle += Math.PI * 2; // 0 to 2PI
+
+      // Edge 0 is 0-60 deg (center 30).
+      // Atan2 matches standard math (0 is right).
+      // Our hex points correspond to 0, 60, 120... 
+      // So Edge 0 (Right to Bottom-Right) is 0 to 60 deg?
+      // Wait, drawing: 
+      // i=0: moveTo(cos(0), sin(0)) [Right point]
+      // i=1: lineTo(cos(60), sin(60)) [Bottom-Right point]
+      // So Edge 0 connects Right Point to Bottom-Right Point. 
+      // The angle of this LINE SEGMENT is not 30 deg.
+      // But the Neighbor sharing this edge should be at 30 deg (South-East).
+      // Yes.
+
+      // Convert to degrees for easier debugging if needed, or just use radians
+      // 30 deg = PI/6. 
+      // We accept anything from 0 to 60 as Edge 0?
+      // Let's normalize so 30 deg is center of bucket 0.
+      return Math.floor(angle / (Math.PI / 3));
     }
 
     // ===== PAINTING =====
@@ -1214,17 +1308,73 @@
       // Draw hexes
       const strokeStyle = `rgba(${state.stroke.r},${state.stroke.g},${state.stroke.b},${state.stroke.a})`;
 
+      // 1. Draw Fills (and full borders if mode is 'nations' or 'all')
       for (let q = 0; q < state.width; q++) {
         for (let r = 0; r < state.height; r++) {
           const factionId = state.hexes[q]?.[r];
-          if (factionId !== null && factionId !== undefined) {
+
+          if (factionId !== null && factionId !== undefined && state.borderMode !== 'all') {
+            // Normal "Nations" or "Frontiers" or "None" mode - draw only existing factions
             const center = getHexCenter(q, r);
             const color = getFactionColor(factionId);
             if (color) {
-              drawHex(center.x, center.y, color, strokeStyle);
+              const drawBorder = state.borderMode === 'nations';
+              drawHex(center.x, center.y, color, drawBorder ? strokeStyle : null);
             }
+          } else if (state.borderMode === 'all') {
+            // "All" mode - draw every hex
+            const center = getHexCenter(q, r);
+            const factionId = state.hexes[q]?.[r];
+            const color = factionId ? getFactionColor(factionId) : null;
+
+            if (color) {
+              drawHex(center.x, center.y, color, strokeStyle);
+            } else {
+              // Empty hex - just border
+              drawHex(center.x, center.y, null, strokeStyle);
+            }
+          } else if (state.borderMode === 'none' && factionId) {
+            const center = getHexCenter(q, r);
+            const color = getFactionColor(factionId);
+            if (color) drawHex(center.x, center.y, color, null);
           }
         }
+      }
+
+      // 2. Draw Frontiers (if mode is 'frontiers')
+      if (state.borderMode === 'frontiers') {
+        ctx.lineWidth = 2; // slightly thicker for visibility
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.8)`;
+        ctx.beginPath();
+
+        for (let q = 0; q < state.width; q++) {
+          for (let r = 0; r < state.height; r++) {
+            const fid = state.hexes[q]?.[r];
+            if (fid === null || fid === undefined) continue;
+
+            // Check neighbors
+            // Check neighbors
+            const odd = q % 2 !== 0;
+            const offsets = odd
+              ? [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [0, -1]]
+              : [[1, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [0, -1]];
+
+            offsets.forEach((offset) => {
+              const nQ = q + offset[0];
+              const nR = r + offset[1];
+              let nFid = null;
+              if (isValidHex(nQ, nR)) {
+                nFid = state.hexes[nQ][nR];
+              }
+
+              if (nFid !== fid) {
+                const edgeIdx = getEdgeIndex(q, r, nQ, nR);
+                drawHexEdge(ctx, q, r, edgeIdx);
+              }
+            });
+          }
+        }
+        ctx.stroke();
       }
 
       ctx.restore();
@@ -1315,14 +1465,32 @@
       }
       ctx.closePath();
 
-      ctx.globalAlpha = state.hexOpacity;
-      ctx.fillStyle = fillColor;
-      ctx.fill();
+      if (fillColor) {
+        ctx.globalAlpha = state.hexOpacity;
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+      }
 
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      if (strokeColor) {
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    function drawHexEdge(context, q, r, edgeIndex) {
+      const center = getHexCenter(q, r);
+      const angleStart = (Math.PI / 3) * edgeIndex;
+      const angleEnd = (Math.PI / 3) * (edgeIndex + 1);
+
+      const x1 = center.x + HEX_SIZE * Math.cos(angleStart);
+      const y1 = center.y + HEX_SIZE * Math.sin(angleStart);
+      const x2 = center.x + HEX_SIZE * Math.cos(angleEnd);
+      const y2 = center.y + HEX_SIZE * Math.sin(angleEnd);
+
+      context.moveTo(x1, y1);
+      context.lineTo(x2, y2);
     }
 
     // ===== INPUT HANDLERS =====
@@ -1479,6 +1647,7 @@
     function toggleLegend() {
       state.showLegend = !state.showLegend;
       document.getElementById('btn-legend').classList.toggle('active', state.showLegend);
+      updateStatus();
     }
 
     function drawLegendHex(ctx, cx, cy, size, color) {
@@ -1501,6 +1670,7 @@
     function downloadImage() {
       calculateHexCounts();
       const includeLegend = document.getElementById('export-legend').checked;
+      const scale = parseFloat(document.getElementById('export-scale').value) || 1;
 
       // Create temporary canvas to measure text
       const tempCanvas = document.createElement('canvas');
@@ -1513,7 +1683,7 @@
       const legendPadding = 20;
       const itemPadding = 25;
 
-      const targetWidth = state.width * COL_WIDTH + HEX_SIZE * 2;
+      const targetWidth = state.width * COL_WIDTH + HEX_SIZE * 2 + GRID_OFFSET_X;
       const mapHeight = state.height * ROW_HEIGHT + HEX_APOTHEM * 2;
 
       let legendHeight = 0;
@@ -1550,15 +1720,27 @@
         legendHeight = legendRows.length * rowHeight + legendPadding * 2;
       }
 
-      // Create offscreen canvas
+      // Create offscreen canvas with Padding
+      const margin = 50;
+      const finalWidth = (targetWidth + margin * 2) * scale;
+      const finalHeight = (mapHeight + legendHeight + margin * 2) * scale;
+
       const offCanvas = document.createElement('canvas');
-      const targetHeight = mapHeight + legendHeight;
-      offCanvas.width = targetWidth;
-      offCanvas.height = targetHeight;
+      offCanvas.width = finalWidth;
+      offCanvas.height = finalHeight;
 
       const offCtx = offCanvas.getContext('2d');
+      offCtx.scale(scale, scale);
 
-      // Draw background
+      // Fill Background
+      offCtx.fillStyle = '#0a0a0f';
+      offCtx.fillRect(0, 0, finalWidth / scale, finalHeight / scale);
+
+      // Translate for Map
+      offCtx.save();
+      offCtx.translate(margin, margin);
+
+      // Draw background image
       if (state.bgImage) {
         offCtx.drawImage(
           state.bgImage,
@@ -1566,90 +1748,161 @@
           state.bgImage.width * state.bgConfig.scaleX,
           state.bgImage.height * state.bgConfig.scaleY
         );
-      } else {
-        offCtx.fillStyle = '#1a1a2e';
-        offCtx.fillRect(0, 0, targetWidth, mapHeight);
       }
 
-      // Draw hexes
+      // Draw hexes based on border mode
       const strokeStyle = `rgba(${state.stroke.r},${state.stroke.g},${state.stroke.b},${state.stroke.a})`;
 
+      // Helper for offscreen draw
+      function drawHexOff(cx, cy, fillColor, strokeColor) {
+        offCtx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i;
+          const x = cx + HEX_SIZE * Math.cos(angle);
+          const y = cy + HEX_SIZE * Math.sin(angle);
+          if (i === 0) offCtx.moveTo(x, y);
+          else offCtx.lineTo(x, y);
+        }
+        offCtx.closePath();
+        if (fillColor) {
+          offCtx.globalAlpha = state.hexOpacity;
+          offCtx.fillStyle = fillColor;
+          offCtx.fill();
+        }
+        if (strokeColor) {
+          offCtx.globalAlpha = 1;
+          offCtx.strokeStyle = strokeColor;
+          offCtx.lineWidth = 1;
+          offCtx.stroke();
+        }
+      }
+
+      // 1. Draw Fills & Standard Borders
       for (let q = 0; q < state.width; q++) {
         for (let r = 0; r < state.height; r++) {
           const factionId = state.hexes[q]?.[r];
-          if (factionId !== null && factionId !== undefined) {
-            const center = getHexCenter(q, r);
-            const color = getFactionColor(factionId);
-            if (color) {
-              // Draw hex
-              offCtx.beginPath();
-              for (let i = 0; i < 6; i++) {
-                const angle = (Math.PI / 3) * i;
-                const x = center.x + HEX_SIZE * Math.cos(angle);
-                const y = center.y + HEX_SIZE * Math.sin(angle);
-                if (i === 0) offCtx.moveTo(x, y);
-                else offCtx.lineTo(x, y);
-              }
-              offCtx.closePath();
+          const center = getHexCenter(q, r);
 
-              offCtx.globalAlpha = state.hexOpacity;
-              offCtx.fillStyle = color;
-              offCtx.fill();
-
-              offCtx.globalAlpha = 1;
-              offCtx.strokeStyle = strokeStyle;
-              offCtx.lineWidth = 1;
-              offCtx.stroke();
+          if (state.borderMode === 'all') {
+            const color = factionId ? getFactionColor(factionId) : null;
+            // Draw fill if exists, stroke always
+            drawHexOff(center.x, center.y, color, strokeStyle);
+          }
+          else if (state.borderMode === 'none') {
+            if (factionId) {
+              const color = getFactionColor(factionId);
+              drawHexOff(center.x, center.y, color, null);
+            }
+          }
+          else { // Nations (default) or Frontiers (fill part)
+            if (factionId) {
+              const color = getFactionColor(factionId);
+              const drawBorder = state.borderMode === 'nations';
+              drawHexOff(center.x, center.y, color, drawBorder ? strokeStyle : null);
             }
           }
         }
       }
 
-      // Draw legend bar
+      // 2. Frontiers Overlay
+      if (state.borderMode === 'frontiers') {
+        offCtx.lineWidth = 2;
+        offCtx.strokeStyle = `rgba(255, 255, 255, 0.8)`;
+        offCtx.beginPath();
+
+        for (let q = 0; q < state.width; q++) {
+          for (let r = 0; r < state.height; r++) {
+            const fid = state.hexes[q]?.[r];
+            if (!fid) continue;
+
+            const odd = q % 2 !== 0;
+            const offsets = odd
+              ? [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [0, -1]]
+              : [[1, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [0, -1]];
+
+            offsets.forEach((offset) => {
+              const nQ = q + offset[0];
+              const nR = r + offset[1];
+              let nFid = null;
+              if (isValidHex(nQ, nR)) {
+                nFid = state.hexes[nQ][nR];
+              }
+              if (nFid !== fid) {
+                // Use geometry to find correct edge index
+                const edgeIdx = getEdgeIndex(q, r, nQ, nR);
+
+                const center = getHexCenter(q, r);
+                const angleStart = (Math.PI / 3) * edgeIdx;
+                const angleEnd = (Math.PI / 3) * (edgeIdx + 1);
+                const x1 = center.x + HEX_SIZE * Math.cos(angleStart);
+                const y1 = center.y + HEX_SIZE * Math.sin(angleStart);
+                const x2 = center.x + HEX_SIZE * Math.cos(angleEnd);
+                const y2 = center.y + HEX_SIZE * Math.sin(angleEnd);
+
+                offCtx.moveTo(x1, y1);
+                offCtx.lineTo(x2, y2);
+              }
+            });
+          }
+        }
+        offCtx.stroke();
+      }
+
+      offCtx.restore(); // Restore margin
+
+      // Draw Legend
       if (includeLegend && legendRows.length > 0) {
-        // Dark background for legend
-        offCtx.fillStyle = '#0a0a0f';
-        offCtx.fillRect(0, mapHeight, targetWidth, legendHeight);
+        const legendY = mapHeight + margin * 2; // Position below map + top margin + bottom margin?
+        // Wait, mapHeight is just key map area. 
+        // We translated (margin, margin). So map ends at margin + mapHeight.
+        // Legend should start at margin + mapHeight + margin/2?
+        // Let's stick to simple layout: Map area is margin -> margin+mapHeight.
+
+        // Background for legend
+        offCtx.fillStyle = 'rgba(10, 10, 15, 0.9)';
+        offCtx.fillRect(0, margin + mapHeight + margin / 2, finalWidth, legendHeight);
+
+        const drawY = margin + mapHeight + margin / 2;
 
         // Border line
         offCtx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
         offCtx.lineWidth = 1;
         offCtx.beginPath();
-        offCtx.moveTo(0, mapHeight);
-        offCtx.lineTo(targetWidth, mapHeight);
+        offCtx.moveTo(0, drawY);
+        offCtx.lineTo(finalWidth, drawY);
         offCtx.stroke();
 
-        // Draw each row
         offCtx.font = '12px Inter, sans-serif';
         offCtx.textAlign = 'left';
         offCtx.textBaseline = 'middle';
 
         legendRows.forEach((row, rowIndex) => {
-          const rowY = mapHeight + legendPadding + rowHeight * (rowIndex + 0.5);
-          let x = (targetWidth - row.width) / 2; // Center the row
+          const rowY = drawY + legendPadding + rowHeight * (rowIndex + 0.5);
+          let x = (finalWidth - row.width) / 2;
 
           row.items.forEach(item => {
-            // Draw hex icon
             drawLegendHex(offCtx, x + legendHexSize, rowY, legendHexSize, fixColor(item.faction.fill));
-
-            // Draw name and count
             offCtx.fillStyle = '#e0e0e0';
             offCtx.fillText(item.text, x + legendHexSize * 2 + 10, rowY);
-
             x += item.itemWidth;
           });
         });
       }
 
       // Download
-      offCanvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${state.name.replace(/\s+/g, '_')}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, 'image/png');
+      if (offCanvas.msToBlob) { // Edge
+        const blob = offCanvas.msToBlob();
+        window.navigator.msSaveBlob(blob, `${state.name.replace(/\s+/g, '_')}.png`);
+      } else {
+        offCanvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${state.name.replace(/\s+/g, '_')}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }, 'image/png');
+      }
     }
   </script>
 
