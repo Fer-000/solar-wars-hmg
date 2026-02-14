@@ -1722,8 +1722,11 @@
 
       // Create offscreen canvas with Padding
       const margin = 50;
-      const finalWidth = (targetWidth + margin * 2) * scale;
-      const finalHeight = (mapHeight + legendHeight + margin * 2) * scale;
+      const logicalWidth = targetWidth + margin * 2;
+      const logicalHeight = mapHeight + legendHeight + margin * 2;
+
+      const finalWidth = logicalWidth * scale;
+      const finalHeight = logicalHeight * scale;
 
       const offCanvas = document.createElement('canvas');
       offCanvas.width = finalWidth;
@@ -1734,7 +1737,7 @@
 
       // Fill Background
       offCtx.fillStyle = '#0a0a0f';
-      offCtx.fillRect(0, 0, finalWidth / scale, finalHeight / scale);
+      offCtx.fillRect(0, 0, logicalWidth, logicalHeight);
 
       // Translate for Map
       offCtx.save();
@@ -1852,24 +1855,20 @@
 
       // Draw Legend
       if (includeLegend && legendRows.length > 0) {
-        const legendY = mapHeight + margin * 2; // Position below map + top margin + bottom margin?
-        // Wait, mapHeight is just key map area. 
-        // We translated (margin, margin). So map ends at margin + mapHeight.
-        // Legend should start at margin + mapHeight + margin/2?
-        // Let's stick to simple layout: Map area is margin -> margin+mapHeight.
+        const legendY = margin + mapHeight + margin * 2;
 
         // Background for legend
         offCtx.fillStyle = 'rgba(10, 10, 15, 0.9)';
-        offCtx.fillRect(0, margin + mapHeight + margin / 2, finalWidth, legendHeight);
+        offCtx.fillRect(0, legendY - margin * 1.5, logicalWidth, legendHeight);
 
-        const drawY = margin + mapHeight + margin / 2;
+        const drawY = legendY - margin * 1.5;
 
         // Border line
         offCtx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
         offCtx.lineWidth = 1;
         offCtx.beginPath();
         offCtx.moveTo(0, drawY);
-        offCtx.lineTo(finalWidth, drawY);
+        offCtx.lineTo(logicalWidth, drawY);
         offCtx.stroke();
 
         offCtx.font = '12px Inter, sans-serif';
@@ -1878,7 +1877,7 @@
 
         legendRows.forEach((row, rowIndex) => {
           const rowY = drawY + legendPadding + rowHeight * (rowIndex + 0.5);
-          let x = (finalWidth - row.width) / 2;
+          let x = (logicalWidth - row.width) / 2;
 
           row.items.forEach(item => {
             drawLegendHex(offCtx, x + legendHexSize, rowY, legendHexSize, fixColor(item.faction.fill));
