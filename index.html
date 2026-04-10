@@ -923,7 +923,6 @@
       </div>
     </div>
 
-    <script src="./env.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script>
@@ -934,19 +933,17 @@
       const ROW_HEIGHT = HEX_APOTHEM * 2;
       const GRID_OFFSET_X = HEX_SIZE / 2; // Shift grid right to start at diagonal
 
-      const runtimeEnv = window.__ENV__ || {};
-
       const firebaseConfig = {
-        apiKey: runtimeEnv.FIREBASE_API_KEY,
-        authDomain: runtimeEnv.FIREBASE_AUTH_DOMAIN,
-        projectId: runtimeEnv.FIREBASE_PROJECT_ID,
-        storageBucket: runtimeEnv.FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: runtimeEnv.FIREBASE_MESSAGING_SENDER_ID,
-        appId: runtimeEnv.FIREBASE_APP_ID,
+        apiKey: "AIzaSyCMvCJ8nTaJiVmTUAmqR9rLutVbJC-bTTM",
+        authDomain: "solar-wars-maps.firebaseapp.com",
+        projectId: "solar-wars-maps",
+        storageBucket: "solar-wars-maps.firebasestorage.app",
+        messagingSenderId: "745235071569",
+        appId: "1:745235071569:web:ec6824d2d51102063eae70",
       };
 
-      const DB_COLLECTION = runtimeEnv.FIREBASE_DB_COLLECTION || "mapConfigs";
-      const DB_DOCUMENT = runtimeEnv.FIREBASE_DB_DOCUMENT || "HMG";
+      const DB_COLLECTION = "mapConfigs";
+      const DB_DOCUMENT = "HMG";
       let db = null;
 
       // ===== STATE =====
